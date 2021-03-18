@@ -10,116 +10,138 @@
 #include <rtthread.h>
 #include "rt_tlsf.h"
 
-#define REGISTER register
+#if defined (RT_USING_USERHEAP) && defined (PKG_USING_TLSF)
 
-static tlsf_t base_heap = 0;
-static rt_mutex_t   tlsflock;
+static tlsf_t tlsf_ptr = 0;
+static struct rt_semaphore heap_sem;
 
-#define RT_MEM_CTOR(pheap, mem, size)   \
-        do {    \
-            TLSF_LOCK_INIT();   \
-            (pheap) = (tlsf_t)tlsf_create_with_pool(mem, size);  \
-        } while (0)
+#ifdef RT_USING_HOOK
+static void (*rt_malloc_hook)(void *ptr, rt_size_t size);
+static void (*rt_free_hook)(void *ptr);
 
-/*
- * destory memory management
- */
-#define VP_MEM_DTOR(pheap)  \
-        do {    \
-            tlsf_destroy((tlsf_t)(pheap));   \
-            TLSF_LOCK_DEINIT(); \
-        } while (0)
-
-/*
- * add memory to management
- */
-#if CFG_VP_TLSF_LOCK_TYPE == 0
-#define VP_MEM_ADD(pheap, mem, size) tlsf_add_pool((tlsf_t)(pheap), mem, size)
-#else
-#define VP_MEM_ADD(pheap, mem, size) \
-        do {    \
-            TLSF_LOCK();    \
-            tlsf_add_pool((tlsf_t)(pheap), mem, size);  \
-            TLSF_UNLOCK();  \
-        } while (0)
-#endif /* CFG_VP_TLSF_LOCK_TYPE */
-
-/*
- * allocate memory
- */
-static void *RT_MEM_MALLOC(tlsf_t  pheap, size_t nbytes)
+void rt_malloc_sethook(void (*hook)(void *ptr, rt_size_t size))
 {
-    REGISTER void *ret;
-
-    TLSF_LOCK();
-    ret = tlsf_malloc((tlsf_t)(pheap), nbytes);
-    TLSF_UNLOCK();
-
-    return (ret);
+    rt_malloc_hook = hook;
 }
 
-/*
- * allocate memory align
- */
-void *RT_MEM_MALLOC_ALIGN(tlsf_t pheap, size_t nbytes, size_t align)
+void rt_free_sethook(void (*hook)(void *ptr))
 {
-    REGISTER void *ret;
-
-    TLSF_LOCK();
-    ret = tlsf_memalign((tlsf_t)(pheap), align, nbytes);
-    TLSF_UNLOCK();
-
-    return (ret);
+    rt_free_hook = hook;
 }
+#endif
 
-/*
- * re-allocate memory
- */
-void *RT_MEM_REALLOC(tlsf_t pheap, void *ptr, size_t new_size)
+void rt_system_heap_init(void *begin_addr, void *end_addr)
 {
-    REGISTER void *ret;
-
-    TLSF_LOCK();
-    ret = tlsf_realloc((tlsf_t)(pheap), ptr, new_size);
-    TLSF_UNLOCK();
-
-    return (ret);
-}
-
-/*
- * free memory
- */
-#define RT_MEM_FREE(pheap, ptr)   \
-        do {    \
-            TLSF_LOCK();  \
-            tlsf_free((tlsf_t)(pheap), ptr);  \
-            TLSF_UNLOCK();  \
-        } while (0)
-
-
-void rt_app_heap_init(void *begin_addr, uint32_t size)
-{
-    if (!base_heap)
+    size_t size;
+    if (begin_addr < end_addr)
     {
-        RT_MEM_CTOR(base_heap, begin_addr, size);
+        size = (rt_uint32_t)end_addr - (rt_uint32_t)begin_addr;
+    }
+    else
+    {
+        return;
+    }
+    if (!tlsf_ptr)
+    {
+        tlsf_ptr = (tlsf_t)tlsf_create_with_pool(begin_addr, size);
+    }
+
+    rt_sem_init(&heap_sem, "heap", 1, RT_IPC_FLAG_FIFO);
+}
+
+void *rt_malloc(rt_size_t nbytes)
+{
+    void *ptr;
+
+    if (tlsf_ptr)
+    {
+        rt_sem_take(&heap_sem, RT_WAITING_FOREVER);
+
+        ptr = tlsf_malloc(tlsf_ptr, nbytes);
+        RT_OBJECT_HOOK_CALL(rt_malloc_hook, ((void *)ptr, nbytes));
+
+        rt_sem_release(&heap_sem);
+    }
+    return ptr;
+}
+
+void rt_free(void *ptr)
+{
+    if (tlsf_ptr)
+    {
+        rt_sem_take(&heap_sem, RT_WAITING_FOREVER);
+
+        tlsf_free(tlsf_ptr, ptr);
+        RT_OBJECT_HOOK_CALL(rt_free_hook, (ptr));
+
+        rt_sem_release(&heap_sem);
     }
 }
 
-void *malloc(size_t nbytes)
+void *rt_realloc(void *ptr, rt_size_t nbytes)
 {
-    return RT_MEM_MALLOC(base_heap, nbytes);
-}
-void *realloc(void *ptr, unsigned newsize)
-{
-    return RT_MEM_REALLOC(base_heap, ptr, newsize);
-}
-void *calloc(size_t count, size_t size)
-{
-    return malloc(count * size);
+    if (tlsf_ptr)
+    {
+        rt_sem_take(&heap_sem, RT_WAITING_FOREVER);
+
+        tlsf_realloc(tlsf_ptr, ptr, nbytes);
+
+        rt_sem_release(&heap_sem);
+    }
+    return ptr;
 }
 
-void free(void *ptr)
+void *rt_calloc(rt_size_t count, rt_size_t size)
 {
-    RT_MEM_FREE(base_heap, ptr);
-    return;
+    void *ptr;
+    rt_size_t total_size;
+
+    total_size = count * size;
+    ptr = rt_malloc(total_size);
+    if (ptr != RT_NULL)
+    {
+        /* clean memory */
+        rt_memset(ptr, 0, total_size);
+    }
+
+    return ptr;
 }
+
+static size_t used_mem = 0;
+static size_t total_mem = 0;
+
+static void mem_info(void *ptr, size_t size, int used, void *user)
+{
+    if (used)
+    {
+        used_mem += size;
+    }
+    total_mem += size;
+}
+
+void rt_memory_info(rt_uint32_t *total,
+                    rt_uint32_t *used,
+                    rt_uint32_t *max_used)
+{
+    used_mem = 0;
+    total_mem = 0;
+
+    tlsf_walk_pool(tlsf_get_pool(tlsf_ptr), mem_info, 0);
+
+    *total = total_mem;
+    *used = used_mem;
+    *max_used = used_mem;
+}
+
+void list_mem(void)
+{
+    used_mem = 0;
+    total_mem = 0;
+
+    tlsf_walk_pool(tlsf_get_pool(tlsf_ptr), mem_info, 0);
+
+    rt_kprintf("total memory: %d\n", total_mem);
+    rt_kprintf("used memory : %d\n", used_mem);
+}
+
+#endif
