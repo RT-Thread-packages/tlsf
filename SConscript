@@ -11,6 +11,6 @@ src/tlsf.c
 """)
 CPPPATH = [cwd + '/src']
 
-group = DefineGroup('tlsf', src, depend = [''], CPPPATH = CPPPATH)
+group = DefineGroup('tlsf', src, depend = ['PKG_USING_TLSF', 'RT_USING_USERHEAP'], CPPPATH = CPPPATH)
 
 Return('group')
