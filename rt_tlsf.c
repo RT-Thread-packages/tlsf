@@ -84,7 +84,7 @@ void *rt_realloc(void *ptr, rt_size_t nbytes)
     {
         rt_sem_take(&heap_sem, RT_WAITING_FOREVER);
 
-        tlsf_realloc(tlsf_ptr, ptr, nbytes);
+        ptr = tlsf_realloc(tlsf_ptr, ptr, nbytes);
 
         rt_sem_release(&heap_sem);
     }
