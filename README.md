@@ -93,7 +93,9 @@ It also leverages the TLSF 2.0 improvement to shrink the per-block overhead from
   * First release
 
 -----
-## How to use tlsf package
+## How to use TLSF
+
+### Select TLSF package
 
 Enable the user heap algorithm:
 
@@ -105,7 +107,7 @@ Enable the user heap algorithm:
             ( ) Small Memory Algorithm                      
             ( ) SLAB Algorithm for large memory             
             ( ) Use all of memheap objects as heap          
-            (X) Use user heap
+            (X) Use user heap Algorithm
 ```
 And enable the tlsf packages:
 
@@ -113,4 +115,28 @@ And enable the tlsf packages:
 -> RT-Thread online packages 
     -> system packages  
         [*]  TLSF: A dynamic memory allocation algorithm with predictable execution time and low fragmentation.
+             [ ] Enable TLSF align
+                 Version (latest)  --->
 ```
+
+- Enable TLSF align：Using TLSF align (malloc align and free align) algorithm if it is selected. Using system align algorithm if it is not selected.
+- Version: The version of TLSF package.
+
+### Multiple heaps
+
+When the system is initialized, one heap(pool) is added automatically.  If multiple heaps(pools) are needed, use the APIs show below: 
+
+add another heap(pool):
+
+```c
+void *heap = rt_system_heap_add((void *)SRAM_START_ADDR, (void *)SRAM_END_ADDR);
+```
+
+remove the heap(pool):
+
+```c
+rt_system_heap_remove(heap);
+```
+
+Note: the maximum number of heaps is 255.
+
