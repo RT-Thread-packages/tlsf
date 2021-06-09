@@ -54,7 +54,7 @@ void rt_system_heap_init(void *begin_addr, void *end_addr)
     if (!tlsf_ptr)
     {
         tlsf_ptr = (tlsf_t)tlsf_create_with_pool(begin_addr, size);
-        rt_sem_init(&heap_sem, "heap", 1, RT_IPC_FLAG_FIFO);
+        rt_sem_init(&heap_sem, "heap", 1, RT_IPC_FLAG_PRIO);
 
         pools_list = rt_malloc(sizeof(struct pool_list));
         rt_slist_init(&pools_list->list);
@@ -84,7 +84,7 @@ void *rt_system_heap_add(void *begin_addr, void *end_addr)
     if (tlsf_ptr)
     {
         tlsf_pool = tlsf_add_pool(tlsf_ptr, begin_addr, size);
-        if (tlsf_pool != 0)
+        if (tlsf_pool != RT_NULL)
         {
             heap = rt_malloc(sizeof(struct pool_list));
             rt_slist_append(&pools_list->list, &heap->list);
@@ -113,7 +113,7 @@ void rt_system_heap_remove(void *heap)
 #ifdef PKG_TLSF_USING_ALIGN
 void *rt_malloc_align(rt_size_t size, rt_size_t align)
 {
-    void *ptr;
+    void *ptr = RT_NULL;
 
     if (tlsf_ptr)
     {
@@ -132,7 +132,7 @@ void rt_free_align(void *ptr)
 
 void *rt_malloc(rt_size_t nbytes)
 {
-    void *ptr;
+    void *ptr = RT_NULL;
 
     if (tlsf_ptr)
     {
@@ -174,7 +174,7 @@ void *rt_realloc(void *ptr, rt_size_t nbytes)
 
 void *rt_calloc(rt_size_t count, rt_size_t size)
 {
-    void *ptr;
+    void *ptr = RT_NULL;
     rt_size_t total_size;
 
     total_size = count * size;
