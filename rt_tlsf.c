@@ -145,6 +145,7 @@ void *rt_malloc(rt_size_t nbytes)
     }
     return ptr;
 }
+RTM_EXPORT(rt_malloc);
 
 void rt_free(void *ptr)
 {
@@ -158,6 +159,7 @@ void rt_free(void *ptr)
         rt_sem_release(&heap_sem);
     }
 }
+RTM_EXPORT(rt_free);
 
 void *rt_realloc(void *ptr, rt_size_t nbytes)
 {
@@ -171,6 +173,7 @@ void *rt_realloc(void *ptr, rt_size_t nbytes)
     }
     return ptr;
 }
+RTM_EXPORT(rt_realloc);
 
 void *rt_calloc(rt_size_t count, rt_size_t size)
 {
@@ -187,6 +190,7 @@ void *rt_calloc(rt_size_t count, rt_size_t size)
 
     return ptr;
 }
+RTM_EXPORT(rt_calloc);
 
 static size_t used_mem = 0;
 static size_t total_mem = 0;
