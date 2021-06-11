@@ -8,7 +8,7 @@
  */
 
 #include <rtthread.h>
-#include "tlsf.h"
+#include "rt_tlsf.h"
 
 #if defined (RT_USING_USERHEAP) && defined (PKG_USING_TLSF)
 
