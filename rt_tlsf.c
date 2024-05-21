@@ -25,6 +25,20 @@ typedef struct pool_list *pool_list_t;
 static pool_list_t pools_list;
 
 #ifdef RT_USING_HOOK
+#if defined(RT_VERSION_CHECK) && (RTTHREAD_VERSION >= RT_VERSION_CHECK(5, 1, 0))
+static void (*rt_malloc_hook)(void **ptr, rt_size_t size);
+static void (*rt_free_hook)(void **ptr);
+
+void rt_malloc_sethook(void (*hook)(void **ptr, rt_size_t size))
+{
+    rt_malloc_hook = hook;
+}
+
+void rt_free_sethook(void (*hook)(void **ptr))
+{
+    rt_free_hook = hook;
+}
+#else
 static void (*rt_malloc_hook)(void *ptr, rt_size_t size);
 static void (*rt_free_hook)(void *ptr);
 
@@ -37,6 +51,7 @@ void rt_free_sethook(void (*hook)(void *ptr))
 {
     rt_free_hook = hook;
 }
+#endif
 #endif
 
 rt_inline void tlsf_lock(void)
@@ -214,9 +229,9 @@ static void mem_info(void *ptr, size_t size, int used, void *user)
     total_mem += size;
 }
 
-void rt_memory_info(rt_uint32_t *total,
-                    rt_uint32_t *used,
-                    rt_uint32_t *max_used)
+void rt_memory_info(rt_size_t *total,
+                    rt_size_t *used,
+                    rt_size_t *max_used)
 {
     used_mem = 0;
     total_mem = 0;
